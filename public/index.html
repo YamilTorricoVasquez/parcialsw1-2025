@@ -1,0 +1,1908 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Diagramador UML 2.0 con WebSocket</title>
+  <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/file-saver/2.0.5/FileSaver.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    // Wait for all dependencies to load
+    function waitForDependencies(callback) {
+      const checkInterval = setInterval(() => {
+        if (
+          window.React &&
+          window.ReactDOM &&
+          window.JSZip &&
+          (window.saveAs || window.Blob) // Check for saveAs or Blob as fallback
+        ) {
+          clearInterval(checkInterval);
+          callback();
+        }
+      }, 100);
+    }
+
+    waitForDependencies(() => {
+      const { useState, useEffect } = React;
+
+      function App() {
+        const [isLoggedIn, setIsLoggedIn] = useState(false);
+        const [username, setUsername] = useState('');
+        const [password, setPassword] = useState('');
+        const [isRegistering, setIsRegistering] = useState(false);
+        const [rooms, setRooms] = useState([]);
+        const [currentRoom, setCurrentRoom] = useState(null);
+        const [ws, setWs] = useState(null);
+        const [token, setToken] = useState(null);
+        const [error, setError] = useState('');
+        const [roomPassword, setRoomPassword] = useState('');
+        const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
+        const [selectedRoomId, setSelectedRoomId] = useState(null);
+        const [showGeneratedViews, setShowGeneratedViews] = useState(false);
+        const [generatedAngularCode, setGeneratedAngularCode] = useState(null);
+
+        useEffect(() => {
+          if (token) {
+            const socket = new WebSocket('ws://localhost:3000');
+            socket.onopen = () => {
+              console.log('Conectado al servidor');
+              socket.send(JSON.stringify({ type: 'getRooms', token }));
+            };
+            socket.onmessage = (event) => {
+              const data = JSON.parse(event.data);
+              if (data.type === 'rooms') setRooms(data.rooms);
+              if (data.type === 'roomUpdate' && currentRoom?.id === data.room.id) {
+                setCurrentRoom(data.room);
+              }
+              if (data.type === 'roomAccess') {
+                setCurrentRoom(data.room);
+                setShowPasswordPrompt(false);
+                setRoomPassword('');
+              }
+              if (data.type === 'error') setError(data.message);
+            };
+            socket.onclose = () => console.log('WebSocket cerrado');
+            setWs(socket);
+            return () => socket.close();
+          }
+        }, [token, currentRoom?.id]);
+
+        const handleRegister = async () => {
+          try {
+            const response = await fetch('http://localhost:3000/register', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username, password })
+            });
+            const data = await response.json();
+            if (response.ok) {
+              setIsRegistering(false);
+              setError('');
+            } else {
+              setError(data.error);
+            }
+          } catch (err) {
+            setError('Error al conectar con el servidor');
+          }
+        };
+
+        const handleLogin = async () => {
+          try {
+            const response = await fetch('http://localhost:3000/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username, password })
+            });
+            const data = await response.json();
+            if (response.ok) {
+              setToken(data.token);
+              setIsLoggedIn(true);
+              setError('');
+            } else {
+              setError(data.error);
+            }
+          } catch (err) {
+            setError('Error al conectar con el servidor');
+          }
+        };
+
+        const handleLogout = () => {
+          setIsLoggedIn(false);
+          setToken(null);
+          setUsername('');
+          setPassword('');
+          setRooms([]);
+          setCurrentRoom(null);
+          setWs(null);
+          setError('');
+          setRoomPassword('');
+          setShowPasswordPrompt(false);
+          setSelectedRoomId(null);
+          setShowGeneratedViews(false);
+          setGeneratedAngularCode(null);
+        };
+
+        const handleJoinRoom = () => {
+          if (selectedRoomId && ws) {
+            ws.send(JSON.stringify({ type: 'joinRoom', roomId: selectedRoomId, password: roomPassword, token }));
+          }
+        };
+
+        if (!isLoggedIn) {
+          return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-100">
+              <div className="bg-white p-6 rounded-lg shadow-lg w-96">
+                <h1 className="text-2xl font-bold mb-4 text-center">
+                  {isRegistering ? 'Registrarse' : 'Iniciar Sesión'}
+                </h1>
+                {error && <p className="text-red-500 mb-4">{error}</p>}
+                <input
+                  type="text"
+                  placeholder="Usuario"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="w-full p-2 mb-4 border rounded"
+                />
+                <input
+                  type="password"
+                  placeholder="Contraseña"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full p-2 mb-4 border rounded"
+                />
+                <button
+                  onClick={isRegistering ? handleRegister : handleLogin}
+                  className="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600 mb-2"
+                >
+                  {isRegistering ? 'Registrarse' : 'Iniciar Sesión'}
+                </button>
+                <button
+                  onClick={() => setIsRegistering(!isRegistering)}
+                  className="w-full text-blue-500 hover:underline"
+                >
+                  {isRegistering ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate'}
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <div>
+            <div className="bg-gray-800 text-white p-2 flex justify-between items-center">
+              <span>Usuario: {username}</span>
+              <button
+                onClick={handleLogout}
+                className="bg-red-500 text-white p-2 rounded hover:bg-red-600"
+              >
+                Cerrar Sesión
+              </button>
+            </div>
+            {currentRoom && showGeneratedViews ? (
+              <GeneratedViews classes={currentRoom.classes} setShowGeneratedViews={setShowGeneratedViews} />
+            ) : currentRoom && generatedAngularCode ? (
+              <CodeViewer code={generatedAngularCode} setGeneratedAngularCode={setGeneratedAngularCode} />
+            ) : currentRoom ? (
+              <UMLBoard 
+                room={currentRoom} 
+                setCurrentRoom={setCurrentRoom} 
+                ws={ws} 
+                token={token} 
+                setShowGeneratedViews={setShowGeneratedViews}
+                setGeneratedAngularCode={setGeneratedAngularCode}
+              />
+            ) : (
+              <RoomSelector
+                rooms={rooms}
+                setRooms={setRooms}
+                setCurrentRoom={setCurrentRoom}
+                ws={ws}
+                token={token}
+                setShowPasswordPrompt={setShowPasswordPrompt}
+                setSelectedRoomId={setSelectedRoomId}
+              />
+            )}
+            {showPasswordPrompt && (
+              <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center">
+                <div className="bg-white p-6 rounded-lg shadow-lg w-96">
+                  <h2 className="text-xl font-bold mb-4">Ingrese la contraseña de la sala</h2>
+                  {error && <p className="text-red-500 mb-4">{error}</p>}
+                  <input
+                    type="password"
+                    value={roomPassword}
+                    onChange={(e) => setRoomPassword(e.target.value)}
+                    className="w-full p-2 mb-4 border rounded"
+                    placeholder="Contraseña"
+                  />
+                  <div className="flex justify-between">
+                    <button
+                      onClick={handleJoinRoom}
+                      className="bg-blue-500 text-white p-2 rounded hover:bg-blue-600"
+                    >
+                      Entrar
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowPasswordPrompt(false);
+                        setRoomPassword('');
+                        setError('');
+                      }}
+                      className="bg-gray-500 text-white p-2 rounded hover:bg-gray-600"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      function RoomSelector({ rooms, setRooms, setCurrentRoom, ws, token, setShowPasswordPrompt, setSelectedRoomId }) {
+        const [newRoomName, setNewRoomName] = useState('');
+        const [newRoomPassword, setNewRoomPassword] = useState('');
+
+        const createRoom = () => {
+          const newRoom = {
+            name: newRoomName || `Sala ${rooms.length + 1}`,
+            classes: [],
+            relationships: [],
+            manyToManyRelations: [],
+            password: newRoomPassword || null
+          };
+          ws.send(JSON.stringify({ type: 'createRoom', room: newRoom, token }));
+          setNewRoomName('');
+          setNewRoomPassword('');
+        };
+
+        const handleRoomClick = (roomId) => {
+          setSelectedRoomId(roomId);
+          setShowPasswordPrompt(true);
+        };
+
+        return (
+          <div className="min-h-screen bg-gray-100 p-6">
+            <h1 className="text-3xl font-bold mb-6">Salas UML</h1>
+            <div className="mb-4">
+              <input
+                type="text"
+                placeholder="Nombre de la sala"
+                value={newRoomName}
+                onChange={(e) => setNewRoomName(e.target.value)}
+                className="p-2 border rounded mr-2"
+              />
+              <input
+                type="password"
+                placeholder="Contraseña (opcional)"
+                value={newRoomPassword}
+                onChange={(e) => setNewRoomPassword(e.target.value)}
+                className="p-2 border rounded mr-2"
+              />
+              <button
+                onClick={createRoom}
+                className="bg-green-500 text-white p-2 rounded hover:bg-green-600"
+              >
+                Crear Nueva Sala
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              {rooms.map(room => (
+                <div
+                  key={room.id}
+                  onClick={() => handleRoomClick(room.id)}
+                  className="bg-white p-4 rounded-lg shadow cursor-pointer hover:bg-gray-50"
+                >
+                  <h2 className="text-xl font-semibold">{room.name}</h2>
+                  <p>{room.classes.length} clases, {room.relationships.length} relaciones</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      }
+
+      function UMLBoard({ room, setCurrentRoom, ws, token, setShowGeneratedViews, setGeneratedAngularCode }) {
+        const [classes, setClasses] = useState(room.classes);
+        const [relationships, setRelationships] = useState(room.relationships);
+        const [activeRelationType, setActiveRelationType] = useState(null);
+        const [selectedClasses, setSelectedClasses] = useState([]);
+        const [isDeleting, setIsDeleting] = useState(false);
+
+        useEffect(() => {
+          setClasses(room.classes);
+          setRelationships(room.relationships);
+        }, [room]);
+
+        const addClass = () => {
+          const newClass = {
+            id: Date.now().toString(),
+            name: `Clase${classes.length + 1}`,
+            attributes: [],
+            methods: [],
+            x: 50,
+            y: 50
+          };
+          const updatedClasses = [...classes, newClass];
+          setClasses(updatedClasses);
+          ws.send(JSON.stringify({ type: 'updateRoom', room: { ...room, classes: updatedClasses, relationships }, token }));
+        };
+
+        const updateClass = (id, updates) => {
+          const updatedClasses = classes.map(cls => cls.id === id ? { ...cls, ...updates } : cls);
+          setClasses(updatedClasses);
+          const updatedRoom = { ...room, classes: updatedClasses, relationships };
+          ws.send(JSON.stringify({ type: 'updateRoom', room: updatedRoom, token }));
+        };
+
+        const handleClassClick = (classId) => {
+          if (isDeleting) {
+            const updatedClasses = classes.filter(cls => cls.id !== classId);
+            const updatedRelationships = relationships.filter(
+              rel => rel.fromClassId !== classId && rel.toClassId !== classId
+            );
+            setClasses(updatedClasses);
+            setRelationships(updatedRelationships);
+            const updatedRoom = { ...room, classes: updatedClasses, relationships: updatedRelationships };
+            ws.send(JSON.stringify({ type: 'updateRoom', room: updatedRoom, token }));
+            setCurrentRoom(updatedRoom);
+            return;
+          }
+
+          if (!activeRelationType) return;
+          const newSelected = [...selectedClasses, classId];
+          if (newSelected.length === 2) {
+            const [fromClassId, toClassId] = newSelected;
+            if (activeRelationType === 'ManyToMany') {
+              const fromClass = classes.find(c => c.id === fromClassId);
+              const toClass = classes.find(c => c.id === toClassId);
+              const tableName = `${fromClass.name}_${toClass.name}`;
+              const intermediateClass = {
+                id: Date.now().toString() + 'intermediate',
+                name: tableName,
+                attributes: [
+                  { name: `${fromClass.name.toLowerCase()}_id`, type: 'int' },
+                  { name: `${toClass.name.toLowerCase()}_id`, type: 'int' }
+                ],
+                methods: [],
+                x: (fromClass.x + toClass.x) / 2,
+                y: (fromClass.y + toClass.y) / 2 + 100
+              };
+              const updatedClasses = [...classes, intermediateClass];
+              const newRelationships = [
+                { fromClassId: fromClassId, toClassId: null, type: 'Association', fromMultiplicity: '1..*', toMultiplicity: '1..1', tempTarget: tableName },
+                { fromClassId: toClassId, toClassId: null, type: 'Association', fromMultiplicity: '1..*', toMultiplicity: '1..1', tempTarget: tableName }
+              ];
+              const updatedRoom = { ...room, classes: updatedClasses, relationships: [...relationships, ...newRelationships] };
+              ws.send(JSON.stringify({ type: 'updateRoom', room: updatedRoom, token }));
+            } else {
+              const newRelationship = {
+                id: Date.now().toString(),
+                fromClassId,
+                toClassId,
+                type: activeRelationType,
+                fromMultiplicity: '1..1',
+                toMultiplicity: '1..1'
+              };
+              const updatedRelationships = [...relationships, newRelationship];
+              setRelationships(updatedRelationships);
+              const updatedRoom = { ...room, classes, relationships: updatedRelationships };
+              ws.send(JSON.stringify({ type: 'updateRoom', room: updatedRoom, token }));
+            }
+            setSelectedClasses([]);
+            setActiveRelationType(null);
+          } else {
+            setSelectedClasses(newSelected);
+          }
+        };
+
+        const handleMultiplicityClick = (relId, isFrom) => {
+          const multiplicities = ['1..1', '0..1', '1..*', '*..*'];
+          const rel = relationships.find(r => r.id === relId);
+          if (!rel) return;
+          const current = isFrom ? rel.fromMultiplicity : rel.toMultiplicity;
+          const nextIndex = (multiplicities.indexOf(current) + 1) % multiplicities.length;
+          const updatedRelationships = relationships.map(r =>
+            r.id === relId
+              ? { ...r, [isFrom ? 'fromMultiplicity' : 'toMultiplicity']: multiplicities[nextIndex] }
+              : r
+          );
+          setRelationships(updatedRelationships);
+          const updatedRoom = { ...room, classes, relationships: updatedRelationships };
+          ws.send(JSON.stringify({ type: 'updateRoom', room: updatedRoom, token }));
+        };
+
+        const handleRelationDoubleClick = (relId, e) => {
+          const rel = relationships.find(r => r.id === relId);
+          if (!rel) return;
+
+          const fromClass = classes.find(cls => cls.id === rel.fromClassId);
+          const toClass = classes.find(cls => cls.id === rel.toClassId);
+          if (!fromClass || !toClass) return;
+
+          const svg = e.target.closest('svg');
+          const rect = svg.getBoundingClientRect();
+
+          const classWidth = 200;
+          const baseClassHeight = 100;
+          const lineHeight = 20;
+          const fromHeight = baseClassHeight + (fromClass.attributes.length + fromClass.methods.length) * lineHeight;
+          const toHeight = baseClassHeight + (toClass.attributes.length + toClass.methods.length) * lineHeight;
+
+          const fromX = fromClass.x + classWidth / 2;
+          const fromY = fromClass.y + fromHeight / 2;
+          const toX = toClass.x + classWidth / 2;
+          const toY = toClass.y + toHeight / 2;
+
+          const clickX = e.clientX - rect.left;
+          const clickY = e.clientY - rect.top;
+
+          const distToFrom = Math.sqrt((clickX - fromX) ** 2 + (clickY - fromY) ** 2);
+          const distToTo = Math.sqrt((clickX - toX) ** 2 + (clickY - toY) ** 2);
+
+          const proximityThreshold = 75;
+          if (distToFrom <= proximityThreshold) {
+            handleMultiplicityClick(relId, true);
+          } else if (distToTo <= proximityThreshold) {
+            handleMultiplicityClick(relId, false);
+          }
+        };
+
+        const handleRelationClick = (relId) => {
+          if (!isDeleting) return;
+          const updatedRelationships = relationships.filter(rel => rel.id !== relId);
+          setRelationships(updatedRelationships);
+          const updatedRoom = { ...room, classes, relationships: updatedRelationships };
+          ws.send(JSON.stringify({ type: 'updateRoom', room: updatedRoom, token }));
+        };
+
+        const saveAndExit = () => {
+          ws.send(JSON.stringify({ type: 'updateRoom', room: { ...room, classes, relationships }, token }));
+          setCurrentRoom(null);
+        };
+
+        const generateAngularProject = () => {
+  const zip = new JSZip();
+
+  // Procesar clases para identificar tablas intermedias y ajustar atributos
+  const classesWithStyles = classes.map((cls, index) => {
+    const colors = ['#e0f7fa', '#fce4ec', '#f3e8ff', '#e0f2fe'];
+    const borderColors = ['#0288d1', '#d81b60', '#7b1fa2', '#0288d1'];
+
+    // Detectar si es una tabla intermedia (nombre con guión bajo y atributos con _id)
+    const isIntermediateTable = cls.name.includes('_') && cls.attributes.some(attr => attr.name.endsWith('_id'));
+
+    // Ajustar atributos para tablas intermedias
+    const adjustedAttributes = isIntermediateTable
+      ? cls.attributes.map(attr => {
+          if (attr.name.endsWith('_id')) {
+            // Extraer el nombre de la clase relacionada (por ejemplo, 'curso' de 'curso_id')
+            const relatedClassName = attr.name.replace('_id', '');
+            // Buscar la clase relacionada en las clases
+            const relatedClass = classes.find(c => c.name.toLowerCase() === relatedClassName);
+            if (relatedClass) {
+              return {
+                ...attr,
+                type: `many-to-one:${relatedClass.name}`
+              };
+            }
+          }
+          return attr;
+        })
+      : cls.attributes;
+
+    return {
+      ...cls,
+      attributes: adjustedAttributes,
+      color: cls.color || colors[index % colors.length],
+      borderColor: cls.borderColor || borderColors[index % borderColors.length]
+    };
+  });
+
+  // app.component.ts - Contenedor principal
+  const appComponentTs = `
+import { Component } from '@angular/core';
+import { RouterModule } from '@angular/router';
+
+@Component({
+  selector: 'app-root',
+  standalone: true,
+  imports: [RouterModule],
+  templateUrl: './app.component.html',
+  styleUrls: ['./app.component.css']
+})
+export class AppComponent {
+  classes = ${JSON.stringify(classesWithStyles, null, 2)};
+}
+`;
+  zip.file('src/app/app.component.ts', appComponentTs);
+
+  // app.component.html - Header mejorado y layout general
+  const appComponentHtml = `
+<div class="min-h-screen bg-gradient-to-b from-gray-100 to-gray-200 flex flex-col">
+  <header class="bg-gradient-to-r from-blue-700 to-blue-500 text-white p-6 shadow-lg">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      <h1 class="text-3xl font-extrabold tracking-tight">Diagramador UML - Angular</h1>
+      <nav class="flex flex-wrap gap-3">
+        <a *ngFor="let cls of classes" [routerLink]="['/class', cls.name.toLowerCase()]" 
+           class="px-4 py-2 rounded-full bg-blue-600 hover:bg-blue-700 transition-all duration-300 text-sm font-medium shadow-md">
+          {{ cls.name }}
+        </a>
+      </nav>
+    </div>
+  </header>
+  <main class="flex-grow p-6">
+    <router-outlet></router-outlet>
+  </main>
+  <footer class="bg-blue-700 text-white p-4 text-center text-sm shadow-inner">
+    <p>© 2025 UML Angular Project - Desarrollado con Angular y Tailwind CSS</p>
+  </footer>
+</div>
+`;
+  zip.file('src/app/app.component.html', appComponentHtml);
+
+  // app.component.css - Estilos mejorados para el contenedor
+  const appComponentCss = `
+header {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+main {
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+footer {
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+}
+
+@media (max-width: 768px) {
+  header {
+    padding: 1rem;
+  }
+
+  header h1 {
+    font-size: 1.5rem;
+  }
+
+  nav {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  nav a {
+    width: 100%;
+    text-align: center;
+  }
+
+  main {
+    padding: 1rem;
+  }
+
+  footer {
+    padding: 1rem;
+    font-size: 0.875rem;
+  }
+}
+`;
+  zip.file('src/app/app.component.css', appComponentCss);
+
+  // app.routes.ts - Definición de rutas
+  const appRoutesTs = `
+import { Routes } from '@angular/router';
+import { ClassViewComponent } from './class-view/class-view.component';
+
+export const routes: Routes = [
+  { path: '', redirectTo: '/class/${classesWithStyles[0]?.name.toLowerCase() || ''}', pathMatch: 'full' },
+  ${classesWithStyles.map(cls => `{ 
+    path: 'class/${cls.name.toLowerCase()}', 
+    component: ClassViewComponent,
+    data: { classData: ${JSON.stringify(cls)} }
+  }`).join(',\n  ')}
+];
+`;
+  zip.file('src/app/app.routes.ts', appRoutesTs);
+
+  // storage.service.ts - Servicio para manejar localStorage
+  const storageServiceTs = `
+import { Injectable } from '@angular/core';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class StorageService {
+  getRecords(className: string): any[] {
+    const records = localStorage.getItem(\`records_\${className.toLowerCase()}\`);
+    return records ? JSON.parse(records) : [];
+  }
+
+  saveRecord(className: string, record: any): void {
+    const records = this.getRecords(className);
+    records.push(record);
+    localStorage.setItem(\`records_\${className.toLowerCase()}\`, JSON.stringify(records));
+  }
+
+  updateRecord(className: string, recordId: string, updatedRecord: any): void {
+    const records = this.getRecords(className);
+    const index = records.findIndex(r => r.id === recordId);
+    if (index !== -1) {
+      records[index] = { ...updatedRecord, id: recordId };
+      localStorage.setItem(\`records_\${className.toLowerCase()}\`, JSON.stringify(records));
+    }
+  }
+
+  deleteRecord(className: string, recordId: string): void {
+    const records = this.getRecords(className);
+    const filteredRecords = records.filter(r => r.id !== recordId);
+    localStorage.setItem(\`records_\${className.toLowerCase()}\`, JSON.stringify(filteredRecords));
+  }
+}
+`;
+  zip.file('src/app/storage.service.ts', storageServiceTs);
+
+  // class-view.component.ts - Componente con validación y depuración
+  const classViewTs = `
+import { Component, OnInit } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
+import { StorageService } from '../storage.service';
+import { v4 as uuidv4 } from 'uuid';
+
+@Component({
+  selector: 'app-class-view',
+  standalone: true,
+  imports: [CommonModule, FormsModule],
+  templateUrl: './class-view.component.html',
+  styleUrls: ['./class-view.component.css']
+})
+export class ClassViewComponent implements OnInit {
+  classData: any;
+  formData: { [key: string]: any } = {};
+  records: any[] = [];
+  editRecordId: string | null = null;
+  relatedRecords: { [key: string]: any[] } = {};
+  isFormValid: boolean = true;
+
+  constructor(private route: ActivatedRoute, private storageService: StorageService) {}
+
+  ngOnInit() {
+    this.classData = this.route.snapshot.data['classData'];
+    console.log('Class Data:', this.classData);
+    this.initializeForm();
+    this.loadRecords();
+    this.loadRelatedRecords();
+    console.log('Related Records:', this.relatedRecords);
+    this.validateForm();
+  }
+
+  initializeForm() {
+    this.classData.attributes.forEach(attr => {
+      console.log('Initializing attribute:', attr.name, attr.type);
+      if (attr.type.startsWith('many-to-many:')) {
+        this.formData[attr.name] = [];
+      } else if (attr.type.startsWith('many-to-one:')) {
+        this.formData[attr.name] = '';
+      } else {
+        this.formData[attr.name] = attr.type === 'number' || attr.type === 'int' ? 0 : '';
+      }
+    });
+  }
+
+  loadRecords() {
+    this.records = this.storageService.getRecords(this.classData.name);
+  }
+
+  loadRelatedRecords() {
+    this.classData.attributes.forEach(attr => {
+      if (attr.type.startsWith('many-to-one:') || attr.type.startsWith('many-to-many:')) {
+        const relatedClass = attr.type.split(':')[1];
+        this.relatedRecords[attr.name] = this.storageService.getRecords(relatedClass);
+      }
+    });
+  }
+
+  getInputClass(attr: any): string {
+    switch (attr.type) {
+      case 'string':
+        return 'border-blue-300 focus:ring-blue-300';
+      case 'number':
+      case 'int':
+        return 'border-green-300 focus:ring-green-300';
+      default:
+        return 'border-gray-300 focus:ring-gray-300';
+    }
+  }
+
+  getIconClass(attr: any): string {
+    switch (attr.type) {
+      case 'string':
+        return 'fas fa-text-width text-blue-500';
+      case 'number':
+      case 'int':
+        return 'fas fa-hashtag text-green-500';
+      case 'many-to-one:':
+      case 'many-to-many:':
+        return 'fas fa-link text-purple-500';
+      default:
+        return 'fas fa-question text-gray-500';
+    }
+  }
+
+  getDisplayValue(record: any, relatedClassName: string): string {
+    if (!record) return 'N/A';
+    const relatedRecords = this.storageService.getRecords(relatedClassName.toLowerCase());
+    const stringAttr = relatedRecords.length
+      ? Object.keys(relatedRecords[0]).find(key => typeof relatedRecords[0][key] === 'string' && key !== 'id')
+      : null;
+    return stringAttr && record[stringAttr] ? record[stringAttr] : record.id || 'N/A';
+  }
+
+  getRelatedDisplayValues(attrName: string, record: any): string {
+    const value = record[attrName];
+    if (!value) return '-';
+    if (Array.isArray(value)) {
+      if (!value.length || !this.relatedRecords[attrName]?.length) return '-';
+      return value
+        .map(id => {
+          const relatedRecord = this.relatedRecords[attrName].find(r => r.id === id);
+          return relatedRecord ? this.getDisplayValue(relatedRecord, attrName.split('_id')[0] || this.classData.name) : null;
+        })
+        .filter(val => val)
+        .join(', ');
+    } else {
+      const relatedRecord = this.relatedRecords[attrName]?.find(r => r.id === value);
+      return relatedRecord ? this.getDisplayValue(relatedRecord, attrName.split('_id')[0] || this.classData.name) : '-';
+    }
+  }
+
+  validateForm() {
+    const hasRelational = this.classData.attributes.some(attr => attr.type.startsWith('many-to-one:') || attr.type.startsWith('many-to-many:'));
+    if (hasRelational) {
+      this.isFormValid = this.classData.attributes.every(attr => {
+        if (attr.type.startsWith('many-to-one:')) {
+          return this.formData[attr.name] && this.formData[attr.name].trim() !== '';
+        }
+        if (attr.type.startsWith('many-to-many:')) {
+          return this.formData[attr.name].length > 0;
+        }
+        return true;
+      });
+    } else {
+      this.isFormValid = true;
+    }
+    console.log('Form Valid:', this.isFormValid, 'Form Data:', this.formData);
+  }
+
+  onSelectionChange() {
+    this.validateForm();
+  }
+
+  handleSubmit() {
+    if (!this.isFormValid) {
+      console.log('Submit blocked: Form invalid');
+      return;
+    }
+    const record = { id: this.editRecordId || uuidv4(), ...this.formData };
+    console.log('Saving record:', record);
+    if (this.editRecordId) {
+      this.storageService.updateRecord(this.classData.name, this.editRecordId, record);
+    } else {
+      this.storageService.saveRecord(this.classData.name, record);
+    }
+    this.clearForm();
+    this.loadRecords();
+  }
+
+  editRecord(record: any) {
+    this.formData = { ...record };
+    this.classData.attributes.forEach(attr => {
+      if (attr.type.startsWith('many-to-many:') && !Array.isArray(this.formData[attr.name])) {
+        this.formData[attr.name] = this.formData[attr.name] ? [this.formData[attr.name]] : [];
+      }
+    });
+    this.editRecordId = record.id;
+    this.validateForm();
+  }
+
+  deleteRecord(recordId: string) {
+    if (confirm('¿Estás seguro de que quieres eliminar este registro?')) {
+      this.storageService.deleteRecord(this.classData.name, recordId);
+      this.loadRecords();
+    }
+  }
+
+  clearForm() {
+    this.initializeForm();
+    this.editRecordId = null;
+    this.validateForm();
+  }
+}
+`;
+  zip.file('src/app/class-view/class-view.component.ts', classViewTs);
+
+  // class-view.component.html - Vista con selectores garantizados para tablas intermedias
+  const classViewHtml = `
+<div class="class-container animate-slide-in {{ 'class-' + classData.id }}">
+  <h2 class="text-2xl md:text-3xl font-bold text-gray-800 mb-6 border-b-2 border-blue-500 pb-2 flex items-center">
+    <span class="mr-2 text-blue-500"><i class="fas fa-book"></i></span>
+    {{ classData?.name | titlecase }}
+  </h2>
+
+  <div class="space-y-6">
+    <form (ngSubmit)="handleSubmit()" class="space-y-5">
+      <ng-container *ngIf="classData?.attributes.length > 0; else noAttributes">
+        <div *ngFor="let attr of classData?.attributes" class="relative space-y-2">
+          <label class="block text-sm font-semibold text-gray-700 tracking-wide flex items-center">
+            <i class="{{ getIconClass(attr) }} mr-2"></i>
+            {{ attr.name | titlecase }}
+            <span class="ml-2 text-gray-400 text-xs">({{ attr.type }})</span>
+          </label>
+          <ng-container *ngIf="attr.type.startsWith('many-to-one:')">
+            <select
+              [(ngModel)]="formData[attr.name]"
+              [name]="attr.name"
+              (ngModelChange)="onSelectionChange()"
+              class="w-full p-3 border rounded-lg focus:ring-2 focus:border-blue-500 transition-all duration-200 shadow-sm border-gray-300"
+            >
+              <option value="">Seleccione {{ attr.type.split(':')[1] | titlecase }}...</option>
+              <option *ngFor="let related of relatedRecords[attr.name]" [value]="related.id">
+                {{ getDisplayValue(related, attr.type.split(':')[1]) }}
+              </option>
+            </select>
+            <p *ngIf="!relatedRecords[attr.name]?.length" class="text-sm text-red-500 mt-1">
+              No hay registros de {{ attr.type.split(':')[1] | titlecase }} disponibles. Por favor, cree uno primero.
+            </p>
+          </ng-container>
+          <ng-container *ngIf="attr.type.startsWith('many-to-many:')">
+            <select
+              multiple
+              [(ngModel)]="formData[attr.name]"
+              [name]="attr.name"
+              class="w-full p-3 border rounded-lg focus:ring-2 focus:border-blue-500 transition-all duration-200 shadow-sm border-gray-300 min-h-[100px]"
+            >
+              <option *ngFor="let related of relatedRecords[attr.name]" [value]="related.id">
+                {{ getDisplayValue(related, attr.type.split(':')[1]) }}
+              </option>
+            </select>
+            <p *ngIf="!relatedRecords[attr.name]?.length" class="text-sm text-red-500 mt-1">
+              No hay registros de {{ attr.type.split(':')[1] | titlecase }} disponibles.
+            </p>
+          </ng-container>
+          <ng-container *ngIf="!attr.type.startsWith('many-to-one:') && !attr.type.startsWith('many-to-many:')">
+            <input
+              [type]="attr.type === 'number' || attr.type === 'int' ? 'number' : 'text'"
+              [(ngModel)]="formData[attr.name]"
+              [name]="attr.name"
+              class="w-full p-3 pl-10 border rounded-lg focus:ring-2 focus:border-blue-500 transition-all duration-200 shadow-sm {{ getInputClass(attr) }}"
+              [placeholder]="'Ingrese ' + (attr.name | titlecase)"
+            />
+            <i class="{{ getIconClass(attr) }} absolute left-3 top-[2.75rem] text-gray-400"></i>
+          </ng-container>
+        </div>
+        <div class="flex gap-3">
+          <button
+            type="submit"
+            [disabled]="!isFormValid"
+            class="flex-1 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition-all duration-200 font-medium shadow-md hover:shadow-lg transform hover:-translate-y-1 disabled:bg-gray-400 disabled:cursor-not-allowed"
+          >
+            {{ editRecordId ? 'Actualizar' : 'Guardar' }}
+          </button>
+          <button
+            type="button"
+            (click)="clearForm()"
+            class="flex-1 bg-gray-500 text-white p-3 rounded-lg hover:bg-gray-600 transition-all duration-200 font-medium shadow-md hover:shadow-lg transform hover:-translate-y-1"
+          >
+            Limpiar
+          </button>
+        </div>
+      </ng-container>
+      <ng-template #noAttributes>
+        <p class="text-gray-500 italic text-center py-4 bg-gray-50 rounded-lg shadow-sm">
+          No hay atributos definidos para esta clase
+        </p>
+      </ng-template>
+    </form>
+  </div>
+
+  <div class="mt-8" *ngIf="records.length > 0; else noRecords">
+    <h3 class="text-xl font-semibold text-gray-700 mb-4">Registros</h3>
+    <div class="overflow-x-auto">
+      <table class="min-w-full bg-white rounded-lg shadow-md">
+        <thead>
+          <tr class="bg-gray-100">
+            <th *ngFor="let attr of classData.attributes" class="px-4 py-2 text-left text-sm font-semibold text-gray-600">
+              {{ attr.name | titlecase }}
+            </th>
+            <th class="px-4 py-2 text-left text-sm font-semibold text-gray-600">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let record of records" class="border-t">
+            <td *ngFor="let attr of classData.attributes" class="px-4 py-2 text-sm text-gray-700">
+              <ng-container *ngIf="!attr.type.startsWith('many-to-one:') && !attr.type.startsWith('many-to-many:'); else relatedData">
+                {{ record[attr.name] }}
+              </ng-container>
+              <ng-template #relatedData>
+                {{ getRelatedDisplayValues(attr.name, record) }}
+              </ng-template>
+            </td>
+            <td class="px-4 py-2 text-sm">
+              <button (click)="editRecord(record)" class="text-blue-500 hover:text-blue-700 mr-3">
+                <i class="fas fa-edit"></i>
+              </button>
+              <button (click)="deleteRecord(record.id)" class="text-red-500 hover:text-red-700">
+                <i class="fas fa-trash"></i>
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <ng-template #noRecords>
+    <p class="text-gray-500 italic text-center py-4 bg-gray-50 rounded-lg shadow-sm">
+      No hay registros para esta clase
+    </p>
+  </ng-template>
+</div>
+`;
+  zip.file('src/app/class-view/class-view.component.html', classViewHtml);
+
+  // class-view.component.css - Estilos actualizados con mejor soporte para selectores
+  const classViewCss = `
+:host {
+  display: block;
+  min-height: calc(100vh - 160px);
+}
+
+.class-container {
+  padding: 2rem;
+  border-radius: 16px;
+  max-width: 1000px;
+  margin: 2rem auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.animate-slide-in {
+  animation: slideIn 0.5s ease-out;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+input, select {
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
+  transition: all 0.2s ease;
+}
+
+input:focus, select:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+select[multiple] {
+  min-height: 100px;
+  overflow-y: auto;
+}
+
+button {
+  transition: all 0.3s ease;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th, td {
+  border: 1px solid #e5e7eb;
+}
+
+th {
+  background-color: #f9fafb;
+}
+
+/* Estilos dinámicos para cada clase */
+${classesWithStyles
+  .map(
+    cls => `
+.class-${cls.id} {
+  background-color: ${cls.color};
+  border-left: 6px solid ${cls.borderColor};
+}
+`
+  )
+  .join('\n')}
+
+/* Estilos responsivos */
+@media (max-width: 768px) {
+  .class-container {
+    padding: 1.5rem;
+    margin: 1rem;
+  }
+
+  h2 {
+    font-size: 1.5rem;
+  }
+
+  input, select, button {
+    font-size: 0.9rem;
+  }
+
+  input {
+    padding: 0.75rem 2.5rem;
+  }
+
+  select {
+    padding: 0.75rem;
+  }
+
+  .class-container {
+    border-left-width: 4px;
+  }
+
+  table {
+    font-size: 0.875rem;
+  }
+
+  th, td {
+    padding: 0.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .class-container {
+    padding: 1rem;
+    margin: 0.5rem;
+  }
+
+  h2 {
+    font-size: 1.25rem;
+  }
+
+  input, select, button {
+    font-size: 0.875rem;
+  }
+}
+`;
+  zip.file('src/app/class-view/class-view.component.css', classViewCss);
+
+  // main.ts
+  const mainTs = `
+import 'zone.js';
+import { bootstrapApplication } from '@angular/platform-browser';
+import { AppComponent } from './app/app.component';
+import { provideRouter } from '@angular/router';
+import { routes } from './app/app.routes';
+
+bootstrapApplication(AppComponent, {
+  providers: [provideRouter(routes)]
+}).catch(err => console.error(err));
+`;
+  zip.file('src/main.ts', mainTs);
+
+  // index.html - Añadir Font Awesome para íconos
+  const indexHtml = `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UML Angular Views</title>
+  <base href="/">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body class="bg-gray-50">
+  <app-root></app-root>
+</body>
+</html>
+`;
+  zip.file('src/index.html', indexHtml);
+
+  // styles.css - Estilos globales con Tailwind optimizados
+  const stylesCss = `
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans antialiased bg-gray-100;
+  }
+  
+  h1, h2, h3 {
+    @apply font-bold tracking-tight;
+  }
+
+  /* Estilo global para contenedores */
+  .class-container {
+    @apply bg-white rounded-xl shadow-md;
+  }
+
+  /* Variables CSS para temas */
+  :root {
+    --primary-color: #2563eb;
+    --secondary-color: #1d4ed8;
+  }
+}
+
+/* Animaciones globales */
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+`;
+  zip.file('src/styles.css', stylesCss);
+
+  // angular.json
+  const angularJson = `
+{
+  "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
+  "version": 1,
+  "newProjectRoot": "projects",
+  "projects": {
+    "uml-angular": {
+      "projectType": "application",
+      "schematics": {},
+      "root": "",
+      "sourceRoot": "src",
+      "prefix": "app",
+      "architect": {
+        "build": {
+          "builder": "@angular-devkit/build-angular:application",
+          "options": {
+            "outputPath": "dist/uml-angular",
+            "index": "src/index.html",
+            "browser": "src/main.ts",
+            "polyfills": [],
+            "tsConfig": "tsconfig.app.json",
+            "assets": [],
+            "styles": ["src/styles.css"],
+            "scripts": []
+          },
+          "configurations": {
+            "production": {
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "500kb",
+                  "maximumError": "1mb"
+                }
+              ],
+              "outputHashing": "all"
+            }
+          }
+        },
+        "serve": {
+          "builder": "@angular-devkit/build-angular:dev-server",
+          "options": {
+            "buildTarget": "uml-angular:build"
+          },
+          "configurations": {
+            "production": {
+              "buildTarget": "uml-angular:build:production"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+`;
+  zip.file('angular.json', angularJson);
+
+  // tsconfig.json
+  const tsconfigJson = `
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "baseUrl": "./",
+    "outDir": "./dist/out-tsc",
+    "sourceMap": true,
+    "declaration": false,
+    "downlevelIteration": true,
+    "experimentalDecorators": true,
+    "moduleResolution": "node",
+    "importHelpers": true,
+    "target": "ES2022",
+    "module": "ES2022",
+    "lib": ["ES2022", "dom"]
+  },
+  "angularCompilerOptions": {
+    "enableI18nLegacyMessageIdFormat": false,
+    "strictInjectionParameters": true,
+    "strictInputAccessModifiers": true,
+    "strictTemplates": true
+  }
+}
+`;
+  zip.file('tsconfig.json', tsconfigJson);
+
+  // tsconfig.app.json
+  const tsconfigAppJson = `
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./out-tsc/app",
+    "types": []
+  },
+  "files": ["src/main.ts"]
+}
+`;
+  zip.file('tsconfig.app.json', tsconfigAppJson);
+
+  // package.json - Añadir uuid para generar IDs
+  const packageJson = `
+{
+  "name": "uml-angular",
+  "version": "0.0.1",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve",
+    "build": "ng build",
+    "watch": "ng build --watch --configuration development"
+  },
+  "private": true,
+  "dependencies": {
+    "@angular/animations": "^17.0.0",
+    "@angular/common": "^17.0.0",
+    "@angular/compiler": "^17.0.0",
+    "@angular/core": "^17.0.0",
+    "@angular/forms": "^17.0.0",
+    "@angular/platform-browser": "^17.0.0",
+    "@angular/platform-browser-dynamic": "^17.0.0",
+    "@angular/router": "^17.0.0",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0",
+    "uuid": "^9.0.0",
+    "zone.js": "~0.14.0"
+  },
+  "devDependencies": {
+    "@angular-devkit/build-angular": "^17.0.0",
+    "@angular/cli": "^17.0.0",
+    "@angular/compiler-cli": "^17.0.0",
+    "tailwindcss": "^3.4.0",
+    "typescript": "~5.2.0"
+  }
+}
+`;
+  zip.file('package.json', packageJson);
+
+  // Generar y establecer el archivo zip para descarga
+  zip.generateAsync({ type: 'blob' }).then(blob => {
+    setGeneratedAngularCode({ zip: blob });
+  });
+};
+        return (
+          <div className="min-h-screen bg-gray-200 p-4">
+            <div className="flex justify-between mb-4 flex-wrap">
+              <h1 className="text-2xl font-bold">{room.name}</h1>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={addClass}
+                  className="bg-blue-500 text-white p-2 rounded hover:bg-blue-600"
+                >
+                  Añadir Clase
+                </button>
+                <button
+                  onClick={() => setActiveRelationType('Association')}
+                  className={`p-2 rounded ${activeRelationType === 'Association' ? 'bg-purple-700' : 'bg-purple-500'} text-white hover:bg-purple-600`}
+                >
+                  Asociación
+                </button>
+                <button
+                  onClick={() => setActiveRelationType('Inheritance')}
+                  className={`p-2 rounded ${activeRelationType === 'Inheritance' ? 'bg-purple-700' : 'bg-purple-500'} text-white hover:bg-purple-600`}
+                >
+                  Herencia
+                </button>
+                <button
+                  onClick={() => setActiveRelationType('Aggregation')}
+                  className={`p-2 rounded ${activeRelationType === 'Aggregation' ? 'bg-purple-700' : 'bg-purple-500'} text-white hover:bg-purple-600`}
+                >
+                  Agregación
+                </button>
+                <button
+                  onClick={() => setActiveRelationType('Composition')}
+                  className={`p-2 rounded ${activeRelationType === 'Composition' ? 'bg-purple-700' : 'bg-purple-500'} text-white hover:bg-purple-600`}
+                >
+                  Composición
+                </button>
+                <button
+                  onClick={() => setActiveRelationType('ManyToMany')}
+                  className={`p-2 rounded ${activeRelationType === 'ManyToMany' ? 'bg-purple-700' : 'bg-purple-500'} text-white hover:bg-purple-600`}
+                >
+                  Muchos a Muchos
+                </button>
+                <button
+                  onClick={() => setIsDeleting(!isDeleting)}
+                  className={`p-2 rounded ${isDeleting ? 'bg-red-700' : 'bg-red-500'} text-white hover:bg-red-600`}
+                >
+                  Eliminar
+                </button>
+                <button
+                  onClick={saveAndExit}
+                  className="bg-gray-500 text-white p-2 rounded hover:bg-gray-600"
+                >
+                  Guardar y Salir
+                </button>
+                <button
+                  onClick={generateAngularProject}
+                  className="bg-yellow-500 text-white p-2 rounded hover:bg-yellow-600"
+                >
+                  Generar Proyecto Angular
+                </button>
+              </div>
+            </div>
+            <div className="relative w-full h-[80vh] bg-white rounded-lg shadow">
+              <svg className="absolute w-full h-full">
+                <defs>
+                  <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="black" />
+                  </marker>
+                  <marker id="diamond" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="12" markerHeight="12" orient="auto">
+                    <path d="M 0 5 L 5 0 L 10 5 L 5 10 z" fill="none" stroke="black" strokeWidth="1" />
+                  </marker>
+                  <marker id="filledDiamond" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="12" markerHeight="12" orient="auto">
+                    <path d="M 0 5 L 5 0 L 10 5 L 5 10 z" fill="black" />
+                  </marker>
+                </defs>
+                {relationships.map(rel => {
+                  const fromClass = classes.find(cls => cls.id === rel.fromClassId);
+                  const toClass = classes.find(cls => cls.id === rel.toClassId);
+                  if (!fromClass || !toClass) return null;
+
+                  const classWidth = 200;
+                  const baseClassHeight = 100;
+                  const lineHeight = 20;
+                  const fromHeight = baseClassHeight + (fromClass.attributes.length + fromClass.methods.length) * lineHeight;
+                  const toHeight = baseClassHeight + (toClass.attributes.length + toClass.methods.length) * lineHeight;
+
+                  const fromX = fromClass.x + classWidth / 2;
+                  const fromY = fromClass.y + fromHeight / 2;
+                  const toX = toClass.x + classWidth / 2;
+                  const toY = toClass.y + toHeight / 2;
+
+                  const dx = toX - fromX;
+                  const dy = toY - fromY;
+                  const lineLength = Math.sqrt(dx * dx + dy * dy);
+                  const unitX = dx / (lineLength || 1);
+                  const unitY = dy / (lineLength || 1);
+
+                  const offset = 30;
+
+                  const fromEdgeX = fromX + (dx > 0 ? classWidth / 2 : -classWidth / 2) * (Math.abs(unitX) > 0.5 ? 1 : 0);
+                  const fromEdgeY = fromY + (dy > 0 ? fromHeight / 2 : -fromHeight / 2) * (Math.abs(unitY) > 0.5 ? 1 : 0);
+                  const toEdgeX = toX - (dx > 0 ? classWidth / 2 : -classWidth / 2) * (Math.abs(unitX) > 0.5 ? 1 : 0);
+                  const toEdgeY = toY - (dy > 0 ? toHeight / 2 : -fromHeight / 2) * (Math.abs(unitY) > 0.5 ? 1 : 0);
+
+                  const fromMultX = fromEdgeX + unitX * (offset + (Math.abs(unitX) > 0.5 ? 0 : fromHeight / 2));
+                  const fromMultY = fromEdgeY + unitY * (offset + (Math.abs(unitY) > 0.5 ? 0 : fromHeight / 2)) + (dy !== 0 ? (dy > 0 ? 15 : -15) : (dx > 0 ? 15 : -15));
+                  const toMultX = toEdgeX - unitX * (offset + (Math.abs(unitX) > 0.5 ? 0 : toHeight / 2));
+                  const toMultY = toEdgeY - unitY * (offset + (Math.abs(unitY) > 0.5 ? 0 : toHeight / 2)) + (dy !== 0 ? (dy > 0 ? -15 : 15) : (dx > 0 ? -15 : 15));
+
+                  const strokeProps =
+                    rel.type === 'Inheritance' ? { strokeDasharray: '0', markerEnd: 'url(#arrow)' } :
+                    rel.type === 'Aggregation' ? { strokeDasharray: '5,5', markerStart: 'url(#diamond)' } :
+                    rel.type === 'Composition' ? { strokeDasharray: '0', markerStart: 'url(#filledDiamond)' } :
+                    rel.type === 'Association' ? { strokeDasharray: '0', markerEnd: 'url(#arrow)' } :
+                    { strokeDasharray: '0', markerEnd: 'url(#arrow)' };
+
+                  const minX = Math.min(fromX, toX);
+                  const minY = Math.min(fromY, toY);
+                  const width = Math.abs(toX - fromX);
+                  const height = Math.abs(toY - fromY);
+                  const padding = 50;
+
+                  return (
+                    <g key={rel.id}>
+                      <line
+                        x1={fromX}
+                        y1={fromY}
+                        x2={toX}
+                        y2={toY}
+                        stroke="black"
+                        strokeWidth="2"
+                        {...strokeProps}
+                      />
+                      <rect
+                        x={minX - padding}
+                        y={minY - padding}
+                        width={width + 2 * padding}
+                        height={height + 2 * padding}
+                        fill="transparent"
+                        className="cursor-pointer"
+                        onClick={() => handleRelationClick(rel.id)}
+                        onDoubleClick={(e) => handleRelationDoubleClick(rel.id, e)}
+                      />
+                      <text x={(fromX + toX) / 2} y={(fromY + toY) / 2 - 10} fill="black" fontSize="12" textAnchor="middle">
+                        {rel.type}
+                      </text>
+                      <text
+                        x={fromMultX}
+                        y={fromMultY}
+                        fill="black"
+                        fontSize="12"
+                        className="cursor-pointer"
+                        onClick={() => handleMultiplicityClick(rel.id, true)}
+                        textAnchor="middle"
+                      >
+                        {rel.fromMultiplicity}
+                      </text>
+                      <text
+                        x={toMultX}
+                        y={toMultY}
+                        fill="black"
+                        fontSize="12"
+                        className="cursor-pointer"
+                        onClick={() => handleMultiplicityClick(rel.id, false)}
+                        textAnchor="middle"
+                      >
+                        {rel.toMultiplicity}
+                      </text>
+                    </g>
+                  );
+                })}
+              </svg>
+              {classes.map(cls => (
+                <ClassBox
+                  key={cls.id}
+                  cls={cls}
+                  updateClass={updateClass}
+                  onClick={() => handleClassClick(cls.id)}
+                  isSelected={selectedClasses.includes(cls.id)}
+                />
+              ))}
+            </div>
+          </div>
+        );
+      }
+
+      function ClassBox({ cls, updateClass, onClick, isSelected }) {
+        const [dragging, setDragging] = useState(false);
+        const [isEditing, setIsEditing] = useState(false);
+        const [name, setName] = useState(cls.name);
+        const [attributes, setAttributes] = useState(cls.attributes);
+        const [methods, setMethods] = useState(cls.methods);
+        const [newAttrName, setNewAttrName] = useState('');
+        const [newAttrType, setNewAttrType] = useState('string');
+        const [newMethodName, setNewMethodName] = useState('');
+        const [newMethodReturnType, setNewMethodReturnType] = useState('void');
+        const [newMethodParams, setNewMethodParams] = useState([]);
+        const [editingAttrIndex, setEditingAttrIndex] = useState(null);
+        const [editingMethodIndex, setEditingMethodIndex] = useState(null);
+
+        const dataTypes = ['string', 'int', 'boolean', 'float', 'double', 'char', 'void'];
+
+        const handleDragStart = (e) => {
+          setDragging(true);
+          e.dataTransfer.setData('text/plain', cls.id);
+        };
+
+        const handleDragEnd = (e) => {
+          setDragging(false);
+          const rect = e.target.getBoundingClientRect();
+          const newX = cls.x + (e.clientX - rect.left - rect.width / 2);
+          const newY = cls.y + (e.clientY - rect.top - rect.height / 2);
+          updateClass(cls.id, { x: newX, y: newY });
+        };
+
+        const addAttribute = () => {
+          if (newAttrName.trim()) {
+            const newAttribute = { name: newAttrName.trim(), type: newAttrType };
+            setAttributes([...attributes, newAttribute]);
+            setNewAttrName('');
+            setNewAttrType('string');
+          }
+        };
+
+        const editAttribute = (index) => {
+          setEditingAttrIndex(index);
+          setNewAttrName(attributes[index].name);
+          setNewAttrType(attributes[index].type);
+        };
+
+        const saveAttributeEdit = () => {
+          if (newAttrName.trim() && editingAttrIndex !== null) {
+            const updatedAttributes = attributes.map((attr, i) =>
+              i === editingAttrIndex ? { name: newAttrName.trim(), type: newAttrType } : attr
+            );
+            setAttributes(updatedAttributes);
+            setEditingAttrIndex(null);
+            setNewAttrName('');
+            setNewAttrType('string');
+          }
+        };
+
+        const removeAttribute = (index) => {
+          setAttributes(attributes.filter((_, i) => i !== index));
+        };
+
+        const addMethod = () => {
+          if (newMethodName.trim()) {
+            const newMethod = {
+              name: newMethodName.trim(),
+              returnType: newMethodReturnType,
+              parameters: newMethodParams
+            };
+            setMethods([...methods, newMethod]);
+            setNewMethodName('');
+            setNewMethodReturnType('void');
+            setNewMethodParams([]);
+          }
+        };
+
+        const editMethod = (index) => {
+          setEditingMethodIndex(index);
+          const method = methods[index];
+          setNewMethodName(method.name);
+          setNewMethodReturnType(method.returnType);
+          setNewMethodParams([...method.parameters]);
+        };
+
+        const saveMethodEdit = () => {
+          if (newMethodName.trim() && editingMethodIndex !== null) {
+            const updatedMethods = methods.map((method, i) =>
+              i === editingMethodIndex
+                ? { name: newMethodName.trim(), returnType: newMethodReturnType, parameters: newMethodParams }
+                : method
+            );
+            setMethods(updatedMethods);
+            setEditingMethodIndex(null);
+            setNewMethodName('');
+            setNewMethodReturnType('void');
+            setNewMethodParams([]);
+          }
+        };
+
+        const removeMethod = (index) => {
+          setMethods(methods.filter((_, i) => i !== index));
+        };
+
+        const addParameter = () => {
+          setNewMethodParams([...newMethodParams, { name: '', type: 'string' }]);
+        };
+
+        const updateParameter = (index, field, value) => {
+          const updatedParams = newMethodParams.map((param, i) =>
+            i === index ? { ...param, [field]: value } : param
+          );
+          setNewMethodParams(updatedParams);
+        };
+
+        const removeParameter = (index) => {
+          setNewMethodParams(newMethodParams.filter((_, i) => i !== index));
+        };
+
+        const saveEdits = () => {
+          updateClass(cls.id, {
+            name,
+            attributes,
+            methods
+          });
+          setIsEditing(false);
+        };
+
+        const formatMethod = (method) => {
+          const params = method.parameters.map(p => `${p.name}: ${p.type}`).join(', ');
+          return `${method.name}(${params}): ${method.returnType}`;
+        };
+
+        return (
+          <div
+            draggable={!isEditing}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            onClick={onClick}
+            className={`absolute bg-white border-2 ${isSelected ? 'border-blue-500' : 'border-black'} rounded p-2 shadow-lg cursor-move`}
+            style={{ left: cls.x, top: cls.y, width: 200 }}
+          >
+            {isEditing ? (
+              <div className="p-2 w-full">
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full p-1 mb-2 border rounded"
+                  placeholder="Nombre de la clase"
+                />
+                <div className="mb-2">
+                  <h4 className="font-semibold">Atributos:</h4>
+                  {attributes.map((attr, index) => (
+                    <div key={index} className="flex items-center mb-1">
+                      <span
+                        className="flex-1 cursor-pointer hover:text-blue-500"
+                        onClick={() => editAttribute(index)}
+                      >
+                        {attr.name}: {attr.type}
+                      </span>
+                      <button
+                        onClick={() => removeAttribute(index)}
+                        className="ml-2 bg-red-500 text-white text-xs p-1 rounded hover:bg-red-600"
+                      >
+                        X
+                      </button>
+                    </div>
+                  ))}
+                  <div className="flex items-center mt-2">
+                    <input
+                      type="text"
+                      value={newAttrName}
+                      onChange={(e) => setNewAttrName(e.target.value)}
+                      className="w-1/2 p-1 border rounded mr-2"
+                      placeholder="Nombre"
+                    />
+                    <select
+                      value={newAttrType}
+                      onChange={(e) => setNewAttrType(e.target.value)}
+                      className="w-1/3 p-1 border rounded mr-2"
+                    >
+                      {dataTypes.filter(type => type !== 'void').map(type => (
+                        <option key={type} value={type}>{type}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={editingAttrIndex !== null ? saveAttributeEdit : addAttribute}
+                      className="bg-blue-500 text-white text-xs p-1 rounded hover:bg-blue-600"
+                    >
+                      {editingAttrIndex !== null ? 'Guardar' : '+'}
+                    </button>
+                  </div>
+                </div>
+                <div className="mb-2">
+                  <h4 className="font-semibold">Métodos:</h4>
+                  {methods.map((method, index) => (
+                    <div key={index} className="flex items-center mb-1">
+                      <span
+                        className="flex-1 cursor-pointer hover:text-blue-500"
+                        onClick={() => editMethod(index)}
+                      >
+                        {formatMethod(method)}
+                      </span>
+                      <button
+                        onClick={() => removeMethod(index)}
+                        className="ml-2 bg-red-500 text-white text-xs p-1 rounded hover:bg-red-600"
+                      >
+                        X
+                      </button>
+                    </div>
+                  ))}
+                  <div className="mt-2">
+                    <div className="flex items-center mb-2">
+                      <input
+                        type="text"
+                        value={newMethodName}
+                        onChange={(e) => setNewMethodName(e.target.value)}
+                        className="w-1/2 p-1 border rounded mr-2"
+                        placeholder="Nombre"
+                      />
+                      <select
+                        value={newMethodReturnType}
+                        onChange={(e) => setNewMethodReturnType(e.target.value)}
+                        className="w-1/3 p-1 border rounded mr-2"
+                      >
+                        {dataTypes.map(type => (
+                          <option key={type} value={type}>{type}</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={editingMethodIndex !== null ? saveMethodEdit : addMethod}
+                        className="bg-blue-500 text-white text-xs p-1 rounded hover:bg-blue-600"
+                      >
+                        {editingMethodIndex !== null ? 'Guardar' : '+'}
+                      </button>
+                    </div>
+                    <div>
+                      <h5 className="text-sm font-medium">Parámetros:</h5>
+                      {newMethodParams.map((param, index) => (
+                        <div key={index} className="flex items-center mb-1">
+                          <input
+                            type="text"
+                            value={param.name}
+                            onChange={(e) => updateParameter(index, 'name', e.target.value)}
+                            className="w-1/2 p-1 border rounded mr-2"
+                            placeholder="Nombre"
+                          />
+                          <select
+                            value={param.type}
+                            onChange={(e) => updateParameter(index, 'type', e.target.value)}
+                            className="w-1/3 p-1 border rounded mr-2"
+                          >
+                            {dataTypes.filter(type => type !== 'void').map(type => (
+                              <option key={type} value={type}>{type}</option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => removeParameter(index)}
+                            className="bg-red-500 text-white text-xs p-1 rounded hover:bg-red-600"
+                          >
+                            X
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        onClick={addParameter}
+                        className="bg-gray-500 text-white text-xs p-1 rounded hover:bg-gray-600 mt-1"
+                      >
+                        + Parámetro
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={saveEdits}
+                  className="bg-green-500 text-white p-1 rounded w-full hover:bg-green-600"
+                >
+                  Guardar Clase
+                </button>
+              </div>
+            ) : (
+              <>
+                <h3
+                  className="font-bold text-center border-b cursor-pointer"
+                  onDoubleClick={() => setIsEditing(true)}
+                >
+                  {cls.name}
+                </h3>
+                <div className="border-b py-1">
+                  {cls.attributes.length > 0 ? (
+                    cls.attributes.map((attr, i) => (
+                      <p key={i}>{attr.name}: {attr.type}</p>
+                    ))
+                  ) : (
+                    <p className="text-gray-500">Sin atributos</p>
+                  )}
+                </div>
+                <div className="py-1">
+                  {cls.methods.length > 0 ? (
+                    cls.methods.map((method, i) => (
+                      <p key={i}>{formatMethod(method)}</p>
+                    ))
+                  ) : (
+                    <p className="text-gray-500">Sin métodos</p>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        );
+      }
+
+      function GeneratedViews({ classes, setShowGeneratedViews }) {
+        const [formData, setFormData] = useState({});
+
+        const handleInputChange = (classId, attrName, value) => {
+          setFormData(prev => ({
+            ...prev,
+            [classId]: {
+              ...prev[classId],
+              [attrName]: value
+            }
+          }));
+        };
+
+        const handleSubmit = (classId) => {
+          console.log(`Datos enviados para ${classId}:`, formData[classId]);
+        };
+
+        return (
+          <div className="min-h-screen bg-gray-100 p-6">
+            <div className="flex justify-between mb-6">
+              <h1 className="text-3xl font-bold">Vistas Generadas</h1>
+              <button
+                onClick={() => setShowGeneratedViews(false)}
+                className="bg-gray-500 text-white p-2 rounded hover:bg-gray-600"
+              >
+                Volver a la Pizarra
+              </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {classes.map(cls => (
+                <div key={cls.id} className="bg-white p-4 rounded-lg shadow">
+                  <h2 className="text-xl font-semibold mb-4">{cls.name}</h2>
+                  {cls.attributes.length > 0 ? (
+                    cls.attributes.map((attr, i) => (
+                      <div key={i} className="mb-2">
+                        <label className="block text-sm font-medium">{attr.name} ({attr.type})</label>
+                        <input
+                          type="text"
+                          value={formData[cls.id]?.[attr.name] || ''}
+                          onChange={(e) => handleInputChange(cls.id, attr.name, e.target.value)}
+                          className="w-full p-2 border rounded"
+                          placeholder={attr.name}
+                        />
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-gray-500">Sin atributos</p>
+                  )}
+                  <button
+                    onClick={() => handleSubmit(cls.id)}
+                    className="mt-4 bg-blue-500 text-white p-2 rounded hover:bg-blue-600 w-full"
+                  >
+                    Guardar
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      }
+
+      function CodeViewer({ code, setGeneratedAngularCode }) {
+        const downloadProject = () => {
+          if (typeof window.saveAs === 'function') {
+            window.saveAs(code.zip, 'uml-angular-project.zip');
+          } else {
+            // Fallback manual download
+            const url = window.URL.createObjectURL(code.zip);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'uml-angular-project.zip';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+          }
+        };
+
+        return (
+          <div className="min-h-screen bg-gray-100 p-6">
+            <div className="flex justify-between mb-6">
+              <h1 className="text-3xl font-bold">Proyecto Generado para Angular</h1>
+              <button
+                onClick={() => setGeneratedAngularCode(null)}
+                className="bg-gray-500 text-white p-2 rounded hover:bg-gray-600"
+              >
+                Volver a la Pizarra
+              </button>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow">
+              <p className="mb-4">Se ha generado un proyecto Angular completo basado en el diagrama de clases. Descárgalo para usarlo:</p>
+              <button
+                onClick={downloadProject}
+                className="bg-green-500 text-white p-2 rounded hover:bg-green-600"
+              >
+                Descargar Proyecto Angular
+              </button>
+              <p className="mt-4 text-sm text-gray-600">
+                Instrucciones: Descomprime el archivo, ejecuta <code>npm install</code> y luego <code>ng serve</code> en el main.ts añadir  <code> import 'zone.js'; </code> para iniciar el proyecto.
+              </p>
+            </div>
+          </div>
+        );
+      }
+
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(<App />);
+    });
+  </script>
+</body>
+</html>
