@@ -50,7 +50,7 @@
 
         useEffect(() => {
           if (token) {
-            const socket = new WebSocket('ws://parcialsw1-2025.onrender.com');
+            const socket = new WebSocket('wss://parcialsw1-2025.onrender.com');
             socket.onopen = () => {
               console.log('Conectado al servidor');
               socket.send(JSON.stringify({ type: 'getRooms', token }));
