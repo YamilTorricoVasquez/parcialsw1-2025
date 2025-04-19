@@ -4,7 +4,7 @@ const WebSocket = require('ws');
 const { Pool } = require('pg');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-
+require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
@@ -14,12 +14,15 @@ app.use(express.json());
 app.use(express.static('public'));
 
 
-const pool = new Pool({
+/*const pool = new Pool({
   user: 'postgres',
   host: 'localhost',
   database: 'uml_diagrams',
   password: '1234',
   port: 5432,
+});*/
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL 
 });
 
 const JWT_SECRET = 'tu_clave_secreta';
