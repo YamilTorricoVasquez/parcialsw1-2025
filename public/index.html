@@ -479,21 +479,33 @@
         const generateAngularProject = () => {
   const zip = new JSZip();
 
-  // Procesar clases para identificar tablas intermedias y ajustar atributos
+  // Nueva paleta de colores vibrante y moderna
   const classesWithStyles = classes.map((cls, index) => {
-    const colors = ['#e0f7fa', '#fce4ec', '#f3e8ff', '#e0f2fe'];
-    const borderColors = ['#0288d1', '#d81b60', '#7b1fa2', '#0288d1'];
+    const colors = [
+      '#ecfdf5', // Verde claro
+      '#fff7ed', // Naranja claro
+      '#f5f3ff', // Púrpura claro
+      '#eff6ff', // Azul claro
+      '#fef2f2', // Rojo claro
+      '#f0fdfa', // Cian claro
+    ];
+    const borderColors = [
+      '#10b981', // Verde esmeralda
+      '#f97316', // Naranja
+      '#8b5cf6', // Púrpura
+      '#3b82f6', // Azul
+      '#ef4444', // Rojo
+      '#06b6d4', // Cian
+    ];
 
-    // Detectar si es una tabla intermedia (nombre con guión bajo y atributos con _id)
+    // Detectar si es una tabla intermedia
     const isIntermediateTable = cls.name.includes('_') && cls.attributes.some(attr => attr.name.endsWith('_id'));
 
     // Ajustar atributos para tablas intermedias
     const adjustedAttributes = isIntermediateTable
       ? cls.attributes.map(attr => {
           if (attr.name.endsWith('_id')) {
-            // Extraer el nombre de la clase relacionada (por ejemplo, 'curso' de 'curso_id')
             const relatedClassName = attr.name.replace('_id', '');
-            // Buscar la clase relacionada en las clases
             const relatedClass = classes.find(c => c.name.toLowerCase() === relatedClassName);
             if (relatedClass) {
               return {
@@ -514,7 +526,7 @@
     };
   });
 
-  // app.component.ts - Contenedor principal
+  // app.component.ts - Sin cambios
   const appComponentTs = `
 import { Component } from '@angular/core';
 import { RouterModule } from '@angular/router';
@@ -532,7 +544,7 @@ export class AppComponent {
 `;
   zip.file('src/app/app.component.ts', appComponentTs);
 
-  // app.component.html - Header mejorado y layout general
+  // app.component.html - Sin cambios
   const appComponentHtml = `
 <div class="min-h-screen bg-gradient-to-b from-gray-100 to-gray-200 flex flex-col">
   <header class="bg-gradient-to-r from-blue-700 to-blue-500 text-white p-6 shadow-lg">
@@ -556,10 +568,11 @@ export class AppComponent {
 `;
   zip.file('src/app/app.component.html', appComponentHtml);
 
-  // app.component.css - Estilos mejorados para el contenedor
+  // app.component.css - Ajustes para consistencia
   const appComponentCss = `
 header {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  background: linear-gradient(to right, #1e3a8a, #3b82f6);
 }
 
 main {
@@ -570,6 +583,17 @@ main {
 
 footer {
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+  background: #1e3a8a;
+}
+
+nav a {
+  background: #2563eb;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+nav a:hover {
+  background: #1d4ed8;
+  transform: translateY(-2px);
 }
 
 @media (max-width: 768px) {
@@ -589,6 +613,7 @@ footer {
   nav a {
     width: 100%;
     text-align: center;
+    padding: 0.75rem;
   }
 
   main {
@@ -603,7 +628,7 @@ footer {
 `;
   zip.file('src/app/app.component.css', appComponentCss);
 
-  // app.routes.ts - Definición de rutas
+  // app.routes.ts - Sin cambios
   const appRoutesTs = `
 import { Routes } from '@angular/router';
 import { ClassViewComponent } from './class-view/class-view.component';
@@ -619,7 +644,7 @@ export const routes: Routes = [
 `;
   zip.file('src/app/app.routes.ts', appRoutesTs);
 
-  // storage.service.ts - Servicio para manejar localStorage
+  // storage.service.ts - Sin cambios
   const storageServiceTs = `
 import { Injectable } from '@angular/core';
 
@@ -656,7 +681,7 @@ export class StorageService {
 `;
   zip.file('src/app/storage.service.ts', storageServiceTs);
 
-  // class-view.component.ts - Componente con validación y depuración
+  // class-view.component.ts - Sin cambios
   const classViewTs = `
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -837,15 +862,17 @@ export class ClassViewComponent implements OnInit {
 `;
   zip.file('src/app/class-view/class-view.component.ts', classViewTs);
 
-  // class-view.component.html - Vista con selectores garantizados para tablas intermedias
+  // class-view.component.html - Ajustes para soportar nuevos estilos
   const classViewHtml = `
 <div class="class-container animate-slide-in {{ 'class-' + classData.id }}">
-  <h2 class="text-2xl md:text-3xl font-bold text-gray-800 mb-6 border-b-2 border-blue-500 pb-2 flex items-center">
-    <span class="mr-2 text-blue-500"><i class="fas fa-book"></i></span>
-    {{ classData?.name | titlecase }}
-  </h2>
+  <div class="header-container" [style.background]="classData.borderColor" [style.border-color]="classData.borderColor">
+    <h2 class="text-2xl md:text-3xl font-bold text-white mb-6 flex items-center">
+      <span class="mr-2"><i class="fas fa-book"></i></span>
+      {{ classData?.name | titlecase }}
+    </h2>
+  </div>
 
-  <div class="space-y-6">
+  <div class="space-y-6 p-6">
     <form (ngSubmit)="handleSubmit()" class="space-y-5">
       <ng-container *ngIf="classData?.attributes.length > 0; else noAttributes">
         <div *ngFor="let attr of classData?.attributes" class="relative space-y-2">
@@ -859,14 +886,15 @@ export class ClassViewComponent implements OnInit {
               [(ngModel)]="formData[attr.name]"
               [name]="attr.name"
               (ngModelChange)="onSelectionChange()"
-              class="w-full p-3 border rounded-lg focus:ring-2 focus:border-blue-500 transition-all duration-200 shadow-sm border-gray-300"
+              class="w-full p-3 border rounded-lg focus:ring-2 transition-all duration-200 shadow-sm"
+              [ngClass]="{'border-gray-300 focus:border-blue-500': !classData.borderColor, 'focus:border-[{{classData.borderColor}}]': classData.borderColor}"
             >
               <option value="">Seleccione {{ attr.type.split(':')[1] | titlecase }}...</option>
               <option *ngFor="let related of relatedRecords[attr.name]" [value]="related.id">
                 {{ getDisplayValue(related, attr.type.split(':')[1]) }}
               </option>
             </select>
-            <p *ngIf="!relatedRecords[attr.name]?.length" class="text-sm text-red-500 mt-1">
+            <p *ngIf="!relatedRecords[attr.name]?.length" class="text-sm text-red-500 mt-1 animate-fade-in">
               No hay registros de {{ attr.type.split(':')[1] | titlecase }} disponibles. Por favor, cree uno primero.
             </p>
           </ng-container>
@@ -875,13 +903,14 @@ export class ClassViewComponent implements OnInit {
               multiple
               [(ngModel)]="formData[attr.name]"
               [name]="attr.name"
-              class="w-full p-3 border rounded-lg focus:ring-2 focus:border-blue-500 transition-all duration-200 shadow-sm border-gray-300 min-h-[100px]"
+              class="w-full p-3 border rounded-lg focus:ring-2 transition-all duration-200 shadow-sm min-h-[120px]"
+              [ngClass]="{'border-gray-300 focus:border-blue-500': !classData.borderColor, 'focus:border-[{{classData.borderColor}}]': classData.borderColor}"
             >
               <option *ngFor="let related of relatedRecords[attr.name]" [value]="related.id">
                 {{ getDisplayValue(related, attr.type.split(':')[1]) }}
               </option>
             </select>
-            <p *ngIf="!relatedRecords[attr.name]?.length" class="text-sm text-red-500 mt-1">
+            <p *ngIf="!relatedRecords[attr.name]?.length" class="text-sm text-red-500 mt-1 animate-fade-in">
               No hay registros de {{ attr.type.split(':')[1] | titlecase }} disponibles.
             </p>
           </ng-container>
@@ -890,43 +919,45 @@ export class ClassViewComponent implements OnInit {
               [type]="attr.type === 'number' || attr.type === 'int' ? 'number' : 'text'"
               [(ngModel)]="formData[attr.name]"
               [name]="attr.name"
-              class="w-full p-3 pl-10 border rounded-lg focus:ring-2 focus:border-blue-500 transition-all duration-200 shadow-sm {{ getInputClass(attr) }}"
+              class="w-full p-3 pl-10 border rounded-lg focus:ring-2 transition-all duration-200 shadow-sm {{ getInputClass(attr) }}"
+              [ngClass]="{'focus:border-[{{classData.borderColor}}]': classData.borderColor}"
               [placeholder]="'Ingrese ' + (attr.name | titlecase)"
             />
-            <i class="{{ getIconClass(attr) }} absolute left-3 top-[2.75rem] text-gray-400"></i>
+            <i class="{{ getIconClass(attr) }} absolute left-3 top-[2.75rem]"></i>
           </ng-container>
         </div>
         <div class="flex gap-3">
           <button
             type="submit"
             [disabled]="!isFormValid"
-            class="flex-1 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition-all duration-200 font-medium shadow-md hover:shadow-lg transform hover:-translate-y-1 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            class="flex-1 p-3 rounded-lg text-white font-medium shadow-md hover:shadow-lg transform hover:-translate-y-1 transition-all duration-200 disabled:cursor-not-allowed"
+            [ngStyle]="{'background-color': classData.borderColor || '#2563eb', 'opacity': isFormValid ? 1 : 0.6}"
           >
             {{ editRecordId ? 'Actualizar' : 'Guardar' }}
           </button>
           <button
             type="button"
             (click)="clearForm()"
-            class="flex-1 bg-gray-500 text-white p-3 rounded-lg hover:bg-gray-600 transition-all duration-200 font-medium shadow-md hover:shadow-lg transform hover:-translate-y-1"
+            class="flex-1 bg-gray-500 text-white p-3 rounded-lg hover:bg-gray-600 font-medium shadow-md hover:shadow-lg transform hover:-translate-y-1 transition-all duration-200"
           >
             Limpiar
           </button>
         </div>
       </ng-container>
       <ng-template #noAttributes>
-        <p class="text-gray-500 italic text-center py-4 bg-gray-50 rounded-lg shadow-sm">
+        <p class="text-gray-500 italic text-center py-4 bg-gray-50 rounded-lg shadow-sm animate-fade-in">
           No hay atributos definidos para esta clase
         </p>
       </ng-template>
     </form>
   </div>
 
-  <div class="mt-8" *ngIf="records.length > 0; else noRecords">
+  <div class="mt-8 p-6" *ngIf="records.length > 0; else noRecords">
     <h3 class="text-xl font-semibold text-gray-700 mb-4">Registros</h3>
-    <div class="overflow-x-auto">
+    <div class="overflow-x-auto animate-slide-in">
       <table class="min-w-full bg-white rounded-lg shadow-md">
         <thead>
-          <tr class="bg-gray-100">
+          <tr [style.background]="classData.borderColor" [style.opacity]="0.1">
             <th *ngFor="let attr of classData.attributes" class="px-4 py-2 text-left text-sm font-semibold text-gray-600">
               {{ attr.name | titlecase }}
             </th>
@@ -934,7 +965,7 @@ export class ClassViewComponent implements OnInit {
           </tr>
         </thead>
         <tbody>
-          <tr *ngFor="let record of records" class="border-t">
+          <tr *ngFor="let record of records" class="border-t hover:bg-opacity-10" [ngClass]="{'hover:bg-[{{classData.borderColor}}]': classData.borderColor}">
             <td *ngFor="let attr of classData.attributes" class="px-4 py-2 text-sm text-gray-700">
               <ng-container *ngIf="!attr.type.startsWith('many-to-one:') && !attr.type.startsWith('many-to-many:'); else relatedData">
                 {{ record[attr.name] }}
@@ -958,7 +989,7 @@ export class ClassViewComponent implements OnInit {
   </div>
 
   <ng-template #noRecords>
-    <p class="text-gray-500 italic text-center py-4 bg-gray-50 rounded-lg shadow-sm">
+    <p class="text-gray-500 italic text-center py-4 bg-gray-50 rounded-lg shadow-sm animate-fade-in">
       No hay registros para esta clase
     </p>
   </ng-template>
@@ -966,7 +997,7 @@ export class ClassViewComponent implements OnInit {
 `;
   zip.file('src/app/class-view/class-view.component.html', classViewHtml);
 
-  // class-view.component.css - Estilos actualizados con mejor soporte para selectores
+  // class-view.component.css - Estilos mejorados
   const classViewCss = `
 :host {
   display: block;
@@ -974,39 +1005,92 @@ export class ClassViewComponent implements OnInit {
 }
 
 .class-container {
-  padding: 2rem;
-  border-radius: 16px;
+  padding: 0;
+  border-radius: 12px;
   max-width: 1000px;
   margin: 2rem auto;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  background: white;
+  overflow: hidden;
   transition: all 0.3s ease;
 }
 
+.header-container {
+  padding: 1.5rem 2rem;
+  background: linear-gradient(135deg, var(--header-color, #2563eb), transparent);
+  border-bottom: 4px solid var(--header-color, #2563eb);
+  margin-bottom: 1rem;
+}
+
+h2 {
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
 .animate-slide-in {
-  animation: slideIn 0.5s ease-out;
+  animation: slideIn 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @keyframes slideIn {
-  from { opacity: 0; transform: translateY(20px); }
+  from { opacity: 0; transform: translateY(30px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 input, select {
-  box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
-  transition: all 0.2s ease;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
 }
 
 input:focus, select:focus {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+  border-color: var(--focus-color, #3b82f6);
+}
+
+input:hover, select:hover {
+  background: #f8fafc;
 }
 
 select[multiple] {
-  min-height: 100px;
-  overflow-y: auto;
+  min-height: 120px;
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db #f3f4f6;
+}
+
+select[multiple]::-webkit-scrollbar {
+  width: 8px;
+}
+
+select[multiple]::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 4px;
+}
+
+select[multiple]::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+}
+
+select[multiple]::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
 }
 
 button {
+  border-radius: 8px;
+  padding: 0.75rem;
+  font-weight: 500;
   transition: all 0.3s ease;
 }
 
@@ -1016,16 +1100,35 @@ button:disabled {
 }
 
 table {
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 th, td {
-  border: 1px solid #e5e7eb;
+  border: none;
+  padding: 1rem;
 }
 
 th {
-  background-color: #f9fafb;
+  background: #f9fafb;
+  font-weight: 600;
+  color: #4b5563;
+}
+
+td {
+  background: white;
+  transition: background 0.2s ease;
+}
+
+tr {
+  transition: background 0.2s ease;
+}
+
+tr:hover {
+  background: rgba(var(--hover-color, 0, 0, 0), 0.1);
 }
 
 /* Estilos dinámicos para cada clase */
@@ -1033,8 +1136,16 @@ ${classesWithStyles
   .map(
     cls => `
 .class-${cls.id} {
-  background-color: ${cls.color};
-  border-left: 6px solid ${cls.borderColor};
+  background: ${cls.color};
+}
+.class-${cls.id} .header-container {
+  --header-color: ${cls.borderColor};
+}
+.class-${cls.id} input:focus, .class-${cls.id} select:focus {
+  --focus-color: ${cls.borderColor};
+}
+.class-${cls.id} tr:hover {
+  --hover-color: ${cls.borderColor.replace('#', '').match(/.{2}/g).map(hex => parseInt(hex, 16)).join(',')};
 }
 `
   )
@@ -1043,28 +1154,29 @@ ${classesWithStyles
 /* Estilos responsivos */
 @media (max-width: 768px) {
   .class-container {
-    padding: 1.5rem;
     margin: 1rem;
+    border-radius: 8px;
+  }
+
+  .header-container {
+    padding: 1rem 1.5rem;
   }
 
   h2 {
     font-size: 1.5rem;
   }
 
+  .space-y-6 {
+    padding: 1.5rem;
+  }
+
   input, select, button {
     font-size: 0.9rem;
+    padding: 0.65rem;
   }
 
-  input {
-    padding: 0.75rem 2.5rem;
-  }
-
-  select {
-    padding: 0.75rem;
-  }
-
-  .class-container {
-    border-left-width: 4px;
+  select[multiple] {
+    min-height: 100px;
   }
 
   table {
@@ -1072,28 +1184,40 @@ ${classesWithStyles
   }
 
   th, td {
-    padding: 0.5rem;
+    padding: 0.75rem;
   }
 }
 
 @media (max-width: 480px) {
   .class-container {
-    padding: 1rem;
     margin: 0.5rem;
+  }
+
+  .header-container {
+    padding: 0.75rem 1rem;
   }
 
   h2 {
     font-size: 1.25rem;
   }
 
+  .space-y-6 {
+    padding: 1rem;
+  }
+
   input, select, button {
-    font-size: 0.875rem;
+    font-size: 0.85rem;
+    padding: 0.5rem;
+  }
+
+  th, td {
+    padding: 0.5rem;
   }
 }
 `;
   zip.file('src/app/class-view/class-view.component.css', classViewCss);
 
-  // main.ts
+  // main.ts - Sin cambios
   const mainTs = `
 import 'zone.js';
 import { bootstrapApplication } from '@angular/platform-browser';
@@ -1107,7 +1231,7 @@ bootstrapApplication(AppComponent, {
 `;
   zip.file('src/main.ts', mainTs);
 
-  // index.html - Añadir Font Awesome para íconos
+  // index.html - Sin cambios
   const indexHtml = `
 <!DOCTYPE html>
 <html lang="es">
@@ -1126,7 +1250,7 @@ bootstrapApplication(AppComponent, {
 `;
   zip.file('src/index.html', indexHtml);
 
-  // styles.css - Estilos globales con Tailwind optimizados
+  // styles.css - Sin cambios
   const stylesCss = `
 @tailwind base;
 @tailwind components;
@@ -1169,7 +1293,7 @@ bootstrapApplication(AppComponent, {
 `;
   zip.file('src/styles.css', stylesCss);
 
-  // angular.json
+  // angular.json - Sin cambios
   const angularJson = `
 {
   "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
@@ -1226,7 +1350,7 @@ bootstrapApplication(AppComponent, {
 `;
   zip.file('angular.json', angularJson);
 
-  // tsconfig.json
+  // tsconfig.json - Sin cambios
   const tsconfigJson = `
 {
   "compileOnSave": false,
@@ -1253,7 +1377,7 @@ bootstrapApplication(AppComponent, {
 `;
   zip.file('tsconfig.json', tsconfigJson);
 
-  // tsconfig.app.json
+  // tsconfig.app.json - Sin cambios
   const tsconfigAppJson = `
 {
   "extends": "./tsconfig.json",
@@ -1266,7 +1390,7 @@ bootstrapApplication(AppComponent, {
 `;
   zip.file('tsconfig.app.json', tsconfigAppJson);
 
-  // package.json - Añadir uuid para generar IDs
+  // package.json - Sin cambios
   const packageJson = `
 {
   "name": "uml-angular",
