@@ -1426,7 +1426,7 @@ bootstrapApplication(AppComponent, {
       rel.type === 'Inheritance' ? { strokeDasharray: '0', markerEnd: 'url(#arrow)' } :
       rel.type === 'Aggregation' ? { strokeDasharray: '5,5', markerStart: 'url(#diamond)' } :
       rel.type === 'Composition' ? { strokeDasharray: '0', markerStart: 'url(#filledDiamond)' } :
-      rel.type === 'Association' ? { strokeDasharray: '0', markerEnd: 'url(#arrow)' } :
+      rel.type === 'Association' ? { strokeDasharray: '0' } :
       rel.type === 'ManyToMany' ? { strokeDasharray: '0' } :
       { strokeDasharray: '0', markerEnd: 'url(#arrow)' };
 
