@@ -1370,76 +1370,95 @@ bootstrapApplication(AppComponent, {
               </div>
             </div>
             <div className="relative w-full h-[80vh] bg-white rounded-lg shadow">
-  <svg className="absolute w-full h-full">
-    <defs>
-      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto">
-        <path d="M 0 0 L 10 5 L 0 10 z" fill="black" />
-      </marker>
-      <marker id="diamond" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="12" markerHeight="12" orient="auto">
-        <path d="M 0 5 L 5 0 L 10 5 L 5 10 z" fill="none" stroke="black" strokeWidth="1" />
-      </marker>
-      <marker id="filledDiamond" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="12" markerHeight="12" orient="auto">
-        <path d="M 0 5 L 5 0 L 10 5 L 5 10 z" fill="black" />
-      </marker>
-    </defs>
-    {relationships.map(rel => {
-      const fromClass = classes.find(cls => cls.id === rel.fromClassId);
-      const toClass = classes.find(cls => cls.id === rel.toClassId);
-      if (!fromClass || !toClass) return null;
+              <svg className="absolute w-full h-full">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="black" />
+    </marker>
+    <marker id="diamond" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="12" markerHeight="12" orient="auto">
+      <path d="M 0 5 L 5 0 L 10 5 L 5 10 z" fill="none" stroke="black" strokeWidth="1" />
+    </marker>
+    <marker id="filledDiamond" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="12" markerHeight="12" orient="auto">
+      <path d="M 0 5 L 5 0 L 10 5 L 5 10 z" fill="black" />
+    </marker>
+  </defs>
+  {relationships.map(rel => {
+    const fromClass = classes.find(cls => cls.id === rel.fromClassId);
+    const toClass = classes.find(cls => cls.id === rel.toClassId);
+    if (!fromClass || !toClass) return null;
 
-      const classWidth = 200;
-      const baseClassHeight = 100;
-      const lineHeight = 20;
-      const fromHeight = baseClassHeight + (fromClass.attributes.length + fromClass.methods.length) * lineHeight;
-      const toHeight = baseClassHeight + (toClass.attributes.length + toClass.methods.length) * lineHeight;
+    const classWidth = 200;
+    const baseClassHeight = 100;
+    const lineHeight = 20;
+    const fromHeight = baseClassHeight + (fromClass.attributes.length + fromClass.methods.length) * lineHeight;
+    const toHeight = baseClassHeight + (toClass.attributes.length + toClass.methods.length) * lineHeight;
 
-      const fromX = fromClass.x + classWidth / 2;
-      const fromY = fromClass.y + fromHeight / 2;
-      const toX = toClass.x + classWidth / 2;
-      const toY = toClass.y + toHeight / 2;
+    const fromX = fromClass.x + classWidth / 2;
+    const fromY = fromClass.y + fromHeight / 2;
+    const toX = toClass.x + classWidth / 2;
+    const toY = toClass.y + toHeight / 2;
 
-      const dx = toX - fromX;
-      const dy = toY - fromY;
-      const lineLength = Math.sqrt(dx * dx + dy * dy);
-      const unitX = dx / (lineLength || 1);
-      const unitY = dy / (lineLength || 1);
+    const dx = toX - fromX;
+    const dy = toY - fromY;
+    const lineLength = Math.sqrt(dx * dx + dy * dy);
+    const unitX = dx / (lineLength || 1);
+    const unitY = dy / (lineLength || 1);
 
-      const offset = 30;
-      const markerOffset = 10; // Distancia antes del borde de la clase para mostrar la flecha/diamante
+    const offset = 30;
+    const markerOffset = 10;
 
-      // Calcular los puntos en los bordes de las clases
-      const fromEdgeX = fromX + (dx > 0 ? classWidth / 2 : -classWidth / 2) * (Math.abs(unitX) > 0.5 ? 1 : 0);
-      const fromEdgeY = fromY + (dy > 0 ? fromHeight / 2 : -fromHeight / 2) * (Math.abs(unitY) > 0.5 ? 1 : 0);
-      const toEdgeX = toX - (dx > 0 ? classWidth / 2 : -classWidth / 2) * (Math.abs(unitX) > 0.5 ? 1 : 0);
-      const toEdgeY = toY - (dy > 0 ? toHeight / 2 : -fromHeight / 2) * (Math.abs(unitY) > 0.5 ? 1 : 0);
+    const fromEdgeX = fromX + (dx > 0 ? classWidth / 2 : -classWidth / 2) * (Math.abs(unitX) > 0.5 ? 1 : 0);
+    const fromEdgeY = fromY + (dy > 0 ? fromHeight / 2 : -fromHeight / 2) * (Math.abs(unitY) > 0.5 ? 1 : 0);
+    const toEdgeX = toX - (dx > 0 ? classWidth / 2 : -classWidth / 2) * (Math.abs(unitX) > 0.5 ? 1 : 0);
+    const toEdgeY = toY - (dy > 0 ? toHeight / 2 : -fromHeight / 2) * (Math.abs(unitY) > 0.5 ? 1 : 0);
 
-      // Ajustar los extremos de la línea para que terminen antes de los bordes
-      const lineStartX = fromEdgeX + unitX * markerOffset;
-      const lineStartY = fromEdgeY + unitY * markerOffset;
-      const lineEndX = toEdgeX - unitX * markerOffset;
-      const lineEndY = toEdgeY - unitY * markerOffset;
+    const lineStartX = fromEdgeX + unitX * markerOffset;
+    const lineStartY = fromEdgeY + unitY * markerOffset;
+    const lineEndX = toEdgeX - unitX * markerOffset;
+    const lineEndY = toEdgeY - unitY * markerOffset;
 
-      // Posiciones de las multiplicidades
-      const fromMultX = fromEdgeX + unitX * (offset + (Math.abs(unitX) > 0.5 ? 0 : fromHeight / 2));
-      const fromMultY = fromEdgeY + unitY * (offset + (Math.abs(unitY) > 0.5 ? 0 : fromHeight / 2)) + (dy !== 0 ? (dy > 0 ? 15 : -15) : (dx > 0 ? 15 : -15));
-      const toMultX = toEdgeX - unitX * (offset + (Math.abs(unitX) > 0.5 ? 0 : toHeight / 2));
-      const toMultY = toEdgeY - unitY * (offset + (Math.abs(unitY) > 0.5 ? 0 : toHeight / 2)) + (dy !== 0 ? (dy > 0 ? -15 : 15) : (dx > 0 ? -15 : 15));
+    const fromMultX = fromEdgeX + unitX * (offset + (Math.abs(unitX) > 0.5 ? 0 : fromHeight / 2));
+    const fromMultY = fromEdgeY + unitY * (offset + (Math.abs(unitY) > 0.5 ? 0 : fromHeight / 2)) + (dy !== 0 ? (dy > 0 ? 15 : -15) : (dx > 0 ? 15 : -15));
+    const toMultX = toEdgeX - unitX * (offset + (Math.abs(unitX) > 0.5 ? 0 : toHeight / 2));
+    const toMultY = toEdgeY - unitY * (offset + (Math.abs(unitY) > 0.5 ? 0 : toHeight / 2)) + (dy !== 0 ? (dy > 0 ? -15 : 15) : (dx > 0 ? -15 : 15));
 
-      const strokeProps =
-        rel.type === 'Inheritance' ? { strokeDasharray: '0', markerEnd: 'url(#arrow)' } :
-        rel.type === 'Aggregation' ? { strokeDasharray: '5,5', markerStart: 'url(#diamond)' } :
-        rel.type === 'Composition' ? { strokeDasharray: '0', markerStart: 'url(#filledDiamond)' } :
-        rel.type === 'Association' ? { strokeDasharray: '0', markerEnd: 'url(#arrow)' } :
-        { strokeDasharray: '0', markerEnd: 'url(#arrow)' };
+    const strokeProps =
+      rel.type === 'Inheritance' ? { strokeDasharray: '0', markerEnd: 'url(#arrow)' } :
+      rel.type === 'Aggregation' ? { strokeDasharray: '5,5', markerStart: 'url(#diamond)' } :
+      rel.type === 'Composition' ? { strokeDasharray: '0', markerStart: 'url(#filledDiamond)' } :
+      rel.type === 'Association' ? { strokeDasharray: '0', markerEnd: 'url(#arrow)' } :
+      rel.type === 'ManyToMany' ? { strokeDasharray: '0' } :
+      { strokeDasharray: '0', markerEnd: 'url(#arrow)' };
 
-      const minX = Math.min(lineStartX, lineEndX);
-      const minY = Math.min(lineStartY, lineEndY);
-      const width = Math.abs(lineEndX - lineStartX);
-      const height = Math.abs(lineEndY - lineStartY);
-      const padding = 50;
+    const minX = Math.min(lineStartX, lineEndX);
+    const minY = Math.min(lineStartY, lineEndY);
+    const width = Math.abs(lineEndX - lineStartX);
+    const height = Math.abs(lineEndY - lineStartY);
+    const padding = 50;
+
+    if (rel.type === 'ManyToMany' && rel.intermediateClassId) {
+      const intermediateClass = classes.find(cls => cls.id === rel.intermediateClassId);
+      if (!intermediateClass) return null;
+
+      const intermediateHeight = baseClassHeight + (intermediateClass.attributes.length + intermediateClass.methods.length) * lineHeight;
+      const intermediateX = intermediateClass.x + classWidth / 2;
+      const intermediateY = intermediateClass.y + intermediateHeight / 2;
+
+      const midX = (lineStartX + lineEndX) / 2;
+      const midY = (lineStartY + lineEndY) / 2;
+
+      // Calcular el punto en el borde de la clase intermedia para la interlínea
+      const intermediateDx = intermediateX - midX;
+      const intermediateDy = intermediateY - midY;
+      const intermediateLength = Math.sqrt(intermediateDx * intermediateDx + intermediateDy * intermediateDy);
+      const intermediateUnitX = intermediateDx / (intermediateLength || 1);
+      const intermediateUnitY = intermediateDy / (intermediateLength || 1);
+      const intermediateEdgeX = intermediateX - (intermediateDx > 0 ? classWidth / 2 : -classWidth / 2) * (Math.abs(intermediateUnitX) > 0.5 ? 1 : 0);
+      const intermediateEdgeY = intermediateY - (intermediateDy > 0 ? intermediateHeight / 2 : -intermediateHeight / 2) * (Math.abs(intermediateUnitY) > 0.5 ? 1 : 0);
 
       return (
         <g key={rel.id}>
+          {/* Línea directa entre Clase1 y Clase2 */}
           <line
             x1={lineStartX}
             y1={lineStartY}
@@ -1448,6 +1467,16 @@ bootstrapApplication(AppComponent, {
             stroke="black"
             strokeWidth="2"
             {...strokeProps}
+          />
+          {/* Interlínea desde el punto medio hacia Clase3 */}
+          <line
+            x1={midX}
+            y1={midY}
+            x2={intermediateEdgeX}
+            y2={intermediateEdgeY}
+            stroke="black"
+            strokeWidth="2"
+            strokeDasharray="5,5"
           />
           <rect
             x={minX - padding}
@@ -1486,8 +1515,58 @@ bootstrapApplication(AppComponent, {
           </text>
         </g>
       );
-    })}
-  </svg>
+    }
+
+    return (
+      <g key={rel.id}>
+        <line
+          x1={lineStartX}
+          y1={lineStartY}
+          x2={lineEndX}
+          y2={lineEndY}
+          stroke="black"
+          strokeWidth="2"
+          {...strokeProps}
+        />
+        <rect
+          x={minX - padding}
+          y={minY - padding}
+          width={width + 2 * padding}
+          height={height + 2 * padding}
+          fill="transparent"
+          className="cursor-pointer"
+          onClick={() => handleRelationClick(rel.id)}
+          onDoubleClick={(e) => handleRelationDoubleClick(rel.id, e)}
+        />
+        <text x={(lineStartX + lineEndX) / 2} y={(lineStartY + lineEndY) / 2 - 10} fill="black" fontSize="12" textAnchor="middle">
+          {rel.type}
+        </text>
+        <text
+          x={fromMultX}
+          y={fromMultY}
+          fill="black"
+          fontSize="12"
+          className="cursor-pointer"
+          onClick={() => handleMultiplicityClick(rel.id, true)}
+          textAnchor="middle"
+        >
+          {rel.fromMultiplicity}
+        </text>
+        <text
+          x={toMultX}
+          y={toMultY}
+          fill="black"
+          fontSize="12"
+          className="cursor-pointer"
+          onClick={() => handleMultiplicityClick(rel.id, false)}
+          textAnchor="middle"
+        >
+          {rel.toMultiplicity}
+        </text>
+      </g>
+    );
+  })}
+</svg>
   {classes.map(cls => (
     <ClassBox
       key={cls.id}
