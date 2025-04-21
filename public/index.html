@@ -343,65 +343,73 @@
         };
 
         const handleClassClick = (classId) => {
-          if (isDeleting) {
-            const updatedClasses = classes.filter(cls => cls.id !== classId);
-            const updatedRelationships = relationships.filter(
-              rel => rel.fromClassId !== classId && rel.toClassId !== classId
-            );
-            setClasses(updatedClasses);
-            setRelationships(updatedRelationships);
-            const updatedRoom = { ...room, classes: updatedClasses, relationships: updatedRelationships };
-            ws.send(JSON.stringify({ type: 'updateRoom', room: updatedRoom, token }));
-            setCurrentRoom(updatedRoom);
-            return;
-          }
+    if (isDeleting) {
+      const updatedClasses = classes.filter(cls => cls.id !== classId);
+      const updatedRelationships = relationships.filter(
+        rel => rel.fromClassId !== classId && rel.toClassId !== classId && rel.intermediateClassId !== classId
+      );
+      setClasses(updatedClasses);
+      setRelationships(updatedRelationships);
+      const updatedRoom = { ...room, classes: updatedClasses, relationships: updatedRelationships };
+      ws.send(JSON.stringify({ type: 'updateRoom', room: updatedRoom, token }));
+      setCurrentRoom(updatedRoom);
+      return;
+    }
 
-          if (!activeRelationType) return;
-          const newSelected = [...selectedClasses, classId];
-          if (newSelected.length === 2) {
-            const [fromClassId, toClassId] = newSelected;
-            if (activeRelationType === 'ManyToMany') {
-              const fromClass = classes.find(c => c.id === fromClassId);
-              const toClass = classes.find(c => c.id === toClassId);
-              const tableName = `${fromClass.name}_${toClass.name}`;
-              const intermediateClass = {
-                id: Date.now().toString() + 'intermediate',
-                name: tableName,
-                attributes: [
-                  { name: `${fromClass.name.toLowerCase()}_id`, type: 'int' },
-                  { name: `${toClass.name.toLowerCase()}_id`, type: 'int' }
-                ],
-                methods: [],
-                x: (fromClass.x + toClass.x) / 2,
-                y: (fromClass.y + toClass.y) / 2 + 100
-              };
-              const updatedClasses = [...classes, intermediateClass];
-              const newRelationships = [
-                { fromClassId: fromClassId, toClassId: null, type: 'Association', fromMultiplicity: '1..*', toMultiplicity: '1..1', tempTarget: tableName },
-                { fromClassId: toClassId, toClassId: null, type: 'Association', fromMultiplicity: '1..*', toMultiplicity: '1..1', tempTarget: tableName }
-              ];
-              const updatedRoom = { ...room, classes: updatedClasses, relationships: [...relationships, ...newRelationships] };
-              ws.send(JSON.stringify({ type: 'updateRoom', room: updatedRoom, token }));
-            } else {
-              const newRelationship = {
-                id: Date.now().toString(),
-                fromClassId,
-                toClassId,
-                type: activeRelationType,
-                fromMultiplicity: '1..1',
-                toMultiplicity: '1..1'
-              };
-              const updatedRelationships = [...relationships, newRelationship];
-              setRelationships(updatedRelationships);
-              const updatedRoom = { ...room, classes, relationships: updatedRelationships };
-              ws.send(JSON.stringify({ type: 'updateRoom', room: updatedRoom, token }));
-            }
-            setSelectedClasses([]);
-            setActiveRelationType(null);
-          } else {
-            setSelectedClasses(newSelected);
-          }
+    if (!activeRelationType) return;
+    const newSelected = [...selectedClasses, classId];
+    if (newSelected.length === 2) {
+      const [fromClassId, toClassId] = newSelected;
+      if (activeRelationType === 'ManyToMany') {
+        const fromClass = classes.find(c => c.id === fromClassId);
+        const toClass = classes.find(c => c.id === toClassId);
+        const tableName = `${fromClass.name}_${toClass.name}`;
+        const intermediateClass = {
+          id: Date.now().toString() + 'intermediate',
+          name: tableName,
+          attributes: [
+            { name: `${fromClass.name.toLowerCase()}_id`, type: 'int' },
+            { name: `${toClass.name.toLowerCase()}_id`, type: 'int' }
+          ],
+          methods: [],
+          x: (fromClass.x + toClass.x) / 2,
+          y: (fromClass.y + toClass.y) / 2 + 100
         };
+        const newRelationship = {
+          id: Date.now().toString(),
+          fromClassId,
+          toClassId,
+          type: 'ManyToMany',
+          intermediateClassId: intermediateClass.id,
+          fromMultiplicity: '1..*',
+          toMultiplicity: '1..*'
+        };
+        const updatedClasses = [...classes, intermediateClass];
+        const updatedRelationships = [...relationships, newRelationship];
+        setClasses(updatedClasses);
+        setRelationships(updatedRelationships);
+        const updatedRoom = { ...room, classes: updatedClasses, relationships: updatedRelationships };
+        ws.send(JSON.stringify({ type: 'updateRoom', room: updatedRoom, token }));
+      } else {
+        const newRelationship = {
+          id: Date.now().toString(),
+          fromClassId,
+          toClassId,
+          type: activeRelationType,
+          fromMultiplicity: '1..1',
+          toMultiplicity: '1..1'
+        };
+        const updatedRelationships = [...relationships, newRelationship];
+        setRelationships(updatedRelationships);
+        const updatedRoom = { ...room, classes, relationships: updatedRelationships };
+        ws.send(JSON.stringify({ type: 'updateRoom', room: updatedRoom, token }));
+      }
+      setSelectedClasses([]);
+      setActiveRelationType(null);
+    } else {
+      setSelectedClasses(newSelected);
+    }
+  };
 
         const handleMultiplicityClick = (relId, isFrom) => {
           const multiplicities = ['1..1', '0..1', '1..*', '*..*'];
